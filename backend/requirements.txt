@@ -1,0 +1,16 @@
+langchain
+langchain-huggingface
+langchain-text-splitters
+langchain-unstructured
+langchain-openai
+faiss-cpu
+unstructured
+Markdown
+sentence-transformers
+lazy_loader
+rank_bm25
+openai
+fastapi
+uvicorn
+python-dotenv
+pydantic

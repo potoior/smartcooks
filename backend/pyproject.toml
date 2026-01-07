@@ -1,0 +1,28 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "faiss-cpu>=1.13.2",
+    "fastapi>=0.128.0",
+    "langchain>=1.2.1",
+    "langchain-community>=0.4.1",
+    "langchain-huggingface>=1.2.0",
+    "langchain-text-splitters>=1.1.0",
+    "langchain-unstructured>=1.0.1",
+    "lazy-loader>=0.4",
+    "markdown>=3.10",
+    "openai>=2.14.0",
+    "pydantic>=2.12.5",
+    "python-dotenv>=1.2.1",
+    "rank-bm25>=0.2.2",
+    "sentence-transformers>=5.2.0",
+    "unstructured>=0.18.26",
+    "uvicorn>=0.40.0",
+]
+
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
