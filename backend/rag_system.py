@@ -150,7 +150,6 @@ class RecipeRAGSystem:
 
         if not relevant_chunks:
             if stream:
-                # 如果是流式输出，返回生成器
                 def empty_generator():
                     yield {
                         "answer": "抱歉，没有找到相关的食谱信息。请尝试其他菜品名称或关键词。",
@@ -176,7 +175,6 @@ class RecipeRAGSystem:
             })
 
         if stream:
-            # 流式输出
             def stream_generator():
                 if route_type == 'list':
                     answer_chunks = self.generation_module.generate_list_answer_stream(question, relevant_docs)
@@ -185,17 +183,16 @@ class RecipeRAGSystem:
                 else:
                     answer_chunks = self.generation_module.generate_basic_answer_stream(question, relevant_docs)
                 
-                # 将每个块作为完整响应发送
                 for chunk in answer_chunks:
-                    yield {
+                    row = {
                         "answer": chunk,
                         "route_type": route_type,
                         "documents": doc_info
                     }
+                    yield row
             
             return stream_generator()
         else:
-            # 普通输出
             if route_type == 'list':
                 answer = self.generation_module.generate_list_answer(question, relevant_docs)
             elif route_type == "detail":

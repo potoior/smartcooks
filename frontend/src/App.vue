@@ -3,7 +3,9 @@
     <el-container>
       <el-header class="header">
         <div class="header-content">
-          <el-icon class="logo-icon"><Food /></el-icon>
+          <el-icon class="logo-icon">
+            <Food />
+          </el-icon>
           <h1>尝尝咸淡</h1>
           <span class="subtitle">智能食谱助手</span>
         </div>
@@ -12,22 +14,38 @@
       <el-main class="main">
         <div class="content-wrapper">
           <div class="chat-container">
-            <div class="chat-messages" ref="messagesContainer">
+            <div
+              class="chat-messages"
+              ref="messagesContainer"
+            >
               <div
                 v-for="(message, index) in messages"
                 :key="index"
                 :class="['message', message.role]"
               >
                 <div class="message-content">
-                  <div v-if="message.role === 'assistant'" class="avatar assistant">
-                    <el-icon><Food /></el-icon>
+                  <div
+                    v-if="message.role === 'assistant'"
+                    class="avatar assistant"
+                  >
+                    <el-icon>
+                      <Food />
+                    </el-icon>
                   </div>
-                  <div v-else class="avatar user">
-                    <el-icon><User /></el-icon>
+                  <div
+                    v-else
+                    class="avatar user"
+                  >
+                    <el-icon>
+                      <User />
+                    </el-icon>
                   </div>
                   <div class="message-text">
                     <div v-html="formatMessage(message.content)"></div>
-                    <div v-if="message.documents && message.documents.length > 0" class="related-docs">
+                    <div
+                      v-if="message.documents && message.documents.length > 0"
+                      class="related-docs"
+                    >
                       <el-tag
                         v-for="(doc, idx) in message.documents"
                         :key="idx"
@@ -36,19 +54,27 @@
                         class="doc-tag"
                       >
                         {{ doc.dish_name }}
-                        <span class="doc-meta">({{ doc.category }} · {{ doc.difficulty }})</span>
+                        <span class="doc-meta">({{ doc.category }} ·
+                          {{ doc.difficulty }})</span>
                       </el-tag>
                     </div>
                   </div>
                 </div>
               </div>
-              <div v-if="loading" class="message assistant">
+              <div
+                v-if="loading"
+                class="message assistant"
+              >
                 <div class="message-content">
                   <div class="avatar assistant">
-                    <el-icon><Food /></el-icon>
+                    <el-icon>
+                      <Food />
+                    </el-icon>
                   </div>
                   <div class="message-text loading">
-                    <el-icon class="is-loading"><Loading /></el-icon>
+                    <el-icon class="is-loading">
+                      <Loading />
+                    </el-icon>
                     <span>正在思考中...</span>
                   </div>
                 </div>
@@ -81,11 +107,16 @@
             <el-card class="stats-card">
               <template #header>
                 <div class="card-header">
-                  <el-icon><DataAnalysis /></el-icon>
+                  <el-icon>
+                    <DataAnalysis />
+                  </el-icon>
                   <span>知识库统计</span>
                 </div>
               </template>
-              <div v-if="stats" class="stats-content">
+              <div
+                v-if="stats"
+                class="stats-content"
+              >
                 <div class="stat-item">
                   <span class="stat-label">食谱总数</span>
                   <span class="stat-value">{{ stats.total_documents }}</span>
@@ -109,8 +140,13 @@
                   </div>
                 </div>
               </div>
-              <div v-else class="loading-stats">
-                <el-icon class="is-loading"><Loading /></el-icon>
+              <div
+                v-else
+                class="loading-stats"
+              >
+                <el-icon class="is-loading">
+                  <Loading />
+                </el-icon>
                 <span>加载中...</span>
               </div>
             </el-card>
@@ -118,7 +154,9 @@
             <el-card class="quick-actions-card">
               <template #header>
                 <div class="card-header">
-                  <el-icon><Lightning /></el-icon>
+                  <el-icon>
+                    <Lightning />
+                  </el-icon>
                   <span>快捷操作</span>
                 </div>
               </template>
@@ -152,6 +190,7 @@ import {
   Star, Coffee, Dessert
 } from '@element-plus/icons-vue'
 import axios from 'axios'
+import { marked } from 'marked'
 
 const messages = ref([
   {
@@ -173,12 +212,7 @@ const quickActions = [
 
 const formatMessage = (content) => {
   if (!content) return ''
-  return content
-    .replace(/\n/g, '<br>')
-    .replace(/## (.*)/g, '<h3>$1</h3>')
-    .replace(/### (.*)/g, '<h4>$1</h4>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/- (.*)/g, '<li>$1</li>')
+  return marked.parse(content)
 }
 
 const scrollToBottom = async () => {
@@ -209,16 +243,62 @@ const sendMessage = async () => {
   await scrollToBottom()
 
   try {
-    const response = await axios.post('/api/ask', {
-      question: message
+    const response = await fetch('/api/ask_stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ question: message })
     })
 
-    messages.value.push({
+    if (!response.ok) {
+      throw new Error('Network response was not ok')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+
+    let assistantMessage = {
       role: 'assistant',
-      content: response.data.answer,
-      documents: response.data.documents,
-      route_type: response.data.route_type
-    })
+      content: '',
+      documents: [],
+      route_type: ''
+    }
+
+    messages.value.push(assistantMessage)
+    const messageIndex = messages.value.length - 1
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value)
+      const lines = chunk.split('\n')
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6))
+
+            if (data.answer) {
+              messages.value[messageIndex].content += data.answer
+            }
+
+            if (data.route_type) {
+              messages.value[messageIndex].route_type = data.route_type
+            }
+
+            if (data.documents && data.documents.length > 0) {
+              messages.value[messageIndex].documents = data.documents
+            }
+
+            await scrollToBottom()
+          } catch (e) {
+            console.error('Error parsing SSE data:', e)
+          }
+        }
+      }
+    }
   } catch (error) {
     console.error('Error:', error)
     ElMessage.error('抱歉，出现了一些问题，请稍后再试')
@@ -382,6 +462,116 @@ onMounted(() => {
   margin: 8px 0 4px 0;
   font-size: 14px;
   color: #666;
+}
+
+.message-text :deep(h1),
+.message-text :deep(h2),
+.message-text :deep(h3),
+.message-text :deep(h4) {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.message-text :deep(h1) {
+  font-size: 18px;
+  color: #333;
+}
+
+.message-text :deep(h2) {
+  font-size: 16px;
+  color: #333;
+}
+
+.message-text :deep(h3) {
+  font-size: 15px;
+  color: #666;
+}
+
+.message-text :deep(h4) {
+  font-size: 14px;
+  color: #666;
+}
+
+.message-text :deep(p) {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+.message-text :deep(ul),
+.message-text :deep(ol) {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.message-text :deep(li) {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+
+.message-text :deep(strong) {
+  font-weight: 600;
+  color: #333;
+}
+
+.message-text :deep(em) {
+  font-style: italic;
+}
+
+.message-text :deep(code) {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  color: #e83e8c;
+}
+
+.message-text :deep(pre) {
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.message-text :deep(pre code) {
+  background: none;
+  padding: 0;
+  color: #333;
+}
+
+.message-text :deep(blockquote) {
+  border-left: 4px solid #667eea;
+  padding-left: 12px;
+  margin: 8px 0;
+  color: #666;
+  font-style: italic;
+}
+
+.message-text :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+.message-text :deep(th),
+.message-text :deep(td) {
+  border: 1px solid #eee;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.message-text :deep(th) {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+.message-text :deep(hr) {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: 12px 0;
 }
 
 .message-text li {

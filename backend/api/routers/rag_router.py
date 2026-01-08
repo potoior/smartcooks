@@ -57,7 +57,7 @@ async def ask_question(request: QuestionRequest):
     try:
         rag = RecipeRAGSystem()  # 获取单例实例
         # 确保只在非流式模式下调用
-        result = rag.ask_question(request.question, stream=False)
+        result = rag.ask_question(request.question, stream=True)
         return result
     except Exception as e:
         print("提问接口出问题了,问题是")
@@ -69,27 +69,23 @@ async def ask_question(request: QuestionRequest):
 async def ask_question_stream(request: QuestionRequest):
     """流式提问接口"""
     try:
-        rag = RecipeRAGSystem()  # 获取单例实例
+        rag = RecipeRAGSystem()
         
         def generate_stream():
-            # 获取流式输出生成器
             stream_generator = rag.ask_question(request.question, stream=True)
             
-            # 遍历生成器并输出结果
             for chunk in stream_generator:
-                # 将结果转换为JSON格式并发送
-                if isinstance(chunk, dict):
-                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-                else:
-                    # 如果是字符串，包装成标准响应格式
-                    response = {
-                        "answer": chunk,
-                        "route_type": "stream",
-                        "documents": []
-                    }
-                    yield f"data: {json.dumps(response, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
         
-        return StreamingResponse(generate_stream(), media_type="text/event-stream")
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
     except Exception as e:
         print("流式提问接口出问题了,问题是")
         print(e)
