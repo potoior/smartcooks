@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from rag_system import RecipeRAGSystem
-
+from .food import get_food_name
 router = APIRouter()
 
 # 由于RecipeRAGSystem现在是单例模式，我们不需要维护全局实例
@@ -25,6 +25,7 @@ def get_rag_system():
 
 class QuestionRequest(BaseModel):
     question: str
+    image_name: Optional[str] = None
 
 
 class SearchRequest(BaseModel):
@@ -53,11 +54,28 @@ async def get_statistics(rag: RecipeRAGSystem = Depends(get_rag_system)):
 
 @router.post("/ask", response_model=AnswerResponse)
 async def ask_question(request: QuestionRequest):
+    # 如果上传了图片，先解析图片有什么蔬菜，然后获取，蔬菜类型的食谱
+    foodName = ''
+    if request.image_name:
+        # 解析图片，获取蔬菜类型
+        image_path = Path("uploads") / request.image_name
+        if not image_path.exists():
+            raise HTTPException(status_code=400, detail="图片不存在")
+        # 这里调用API获取食物名称
+        print("开始解析图片")
+        foodName = get_food_name(image_path)
+        print("解析到的食物名称:", foodName)
+    if request.question.strip() == "":
+        raise HTTPException(status_code=400, detail="问题不能为空")
+    print("解析到的食物名称:", foodName)
+    if foodName == "没有食材":
+        raise HTTPException(status_code=400, detail="图片中没有食材")
+    foodName = "我有"+foodName+","
     """提问接口"""
     try:
         rag = RecipeRAGSystem()  # 获取单例实例
         # 确保只在非流式模式下调用
-        result = rag.ask_question(request.question, stream=True)
+        result = rag.ask_question(foodName + request.question, stream=True)
         return result
     except Exception as e:
         print("提问接口出问题了,问题是")
@@ -71,8 +89,24 @@ async def ask_question_stream(request: QuestionRequest):
     try:
         rag = RecipeRAGSystem()
         
+        foodName = ''
+        if request.image_name:
+            image_path = Path("uploads") / request.image_name
+            if not image_path.exists():
+                raise HTTPException(status_code=400, detail="图片不存在")
+            print("开始解析图片")
+            foodName = get_food_name(image_path)
+            print("解析到的食物名称:", foodName)
+        else:print("没有图片")
+        if foodName == "没有食材":
+            raise HTTPException(status_code=400, detail="图片中没有食材")
+        
+        question = request.question
+        if foodName:
+            question = "我有" + foodName + "," + question
+        
         def generate_stream():
-            stream_generator = rag.ask_question(request.question, stream=True)
+            stream_generator = rag.ask_question(question, stream=True)
             
             for chunk in stream_generator:
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"

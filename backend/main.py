@@ -4,13 +4,15 @@ FastAPI 主应用
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import sys
-from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
 from api.routers.rag_router import router
+from api.routers.upload_router import router as upload_router
 from rag_system import RecipeRAGSystem
 
 app = FastAPI(
@@ -40,6 +42,11 @@ async def lifespan(app: FastAPI):
 app.router.lifespan_context = lifespan
 
 app.include_router(router, prefix="/api", tags=["RAG"])
+app.include_router(upload_router, prefix="/api", tags=["Upload"])
+
+uploads_dir = Path("uploads")
+uploads_dir.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 
 @app.get("/")

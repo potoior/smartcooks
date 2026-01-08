@@ -16,6 +16,9 @@ ENV/
 venv.bak/
 env.bak/
 
+# Uploads directory
+uploads/
+
 # Node.js
 node_modules/
 npm-debug.log*

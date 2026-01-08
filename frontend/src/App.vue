@@ -42,6 +42,12 @@
                   </div>
                   <div class="message-text">
                     <div v-html="formatMessage(message.content)"></div>
+                    <img
+                      v-if="message.image"
+                      :src="message.image"
+                      class="message-image"
+                      alt="上传的图片"
+                    />
                     <div
                       v-if="message.documents && message.documents.length > 0"
                       class="related-docs"
@@ -82,20 +88,54 @@
             </div>
 
             <div class="chat-input">
-              <el-input
-                v-model="inputMessage"
-                type="textarea"
-                :rows="2"
-                placeholder="问我任何关于食谱的问题，比如：宫保鸡丁怎么做？"
-                @keydown.enter.prevent="handleEnter"
-                :disabled="loading"
-              />
+              <div class="input-actions">
+                <el-upload
+                  ref="uploadRef"
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  :on-change="handleImageSelect"
+                  accept="image/*"
+                  :limit="1"
+                >
+                  <el-button
+                    :icon="Picture"
+                    circle
+                    class="upload-button"
+                  />
+                </el-upload>
+              </div>
+              <div class="input-main">
+                <div
+                  v-if="previewImage"
+                  class="image-preview"
+                >
+                  <img
+                    :src="previewImage"
+                    alt="预览图片"
+                  />
+                  <el-button
+                    :icon="Close"
+                    circle
+                    size="small"
+                    class="preview-close"
+                    @click="removePreview"
+                  />
+                </div>
+                <el-input
+                  v-model="inputMessage"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="问我任何关于食谱的问题，比如：宫保鸡丁怎么做？"
+                  @keydown.enter.prevent="handleEnter"
+                  :disabled="loading"
+                />
+              </div>
               <el-button
                 type="primary"
                 :icon="Promotion"
                 @click="sendMessage"
                 :loading="loading"
-                :disabled="!inputMessage.trim()"
+                :disabled="!inputMessage.trim() && !selectedImage"
                 class="send-button"
               >
                 发送
@@ -187,7 +227,7 @@ import { ElMessage } from 'element-plus'
 import {
   Food, User, Promotion, Loading,
   DataAnalysis, Lightning, ChatDotRound,
-  Star, Coffee, Dessert
+  Star, Coffee, Dessert, Picture, Close
 } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { marked } from 'marked'
@@ -202,6 +242,10 @@ const inputMessage = ref('')
 const loading = ref(false)
 const messagesContainer = ref(null)
 const stats = ref(null)
+const selectedImage = ref(null)
+const uploadRef = ref(null)
+const previewImage = ref(null)
+const uploadedImageName = ref('')
 
 const quickActions = [
   { text: '推荐几个素菜', icon: ChatDotRound, type: 'success' },
@@ -229,16 +273,76 @@ const handleEnter = (e) => {
   }
 }
 
+const handleImageSelect = (file) => {
+  selectedImage.value = file.raw
+  previewImage.value = URL.createObjectURL(file.raw)
+  ElMessage.success('图片已选择，请输入问题或直接发送')
+}
+
+const removePreview = () => {
+  if (previewImage.value) {
+    URL.revokeObjectURL(previewImage.value)
+  }
+  selectedImage.value = null
+  uploadedImageName.value = ''
+  previewImage.value = null
+  if (uploadRef.value) {
+    uploadRef.value.clearFiles()
+  }
+}
+
+const resetUpload = () => {
+  removePreview()
+}
+
 const sendMessage = async () => {
   const message = inputMessage.value.trim()
-  if (!message || loading.value) return
+  if (!message && !selectedImage.value || loading.value) return
 
-  messages.value.push({
-    role: 'user',
-    content: message
-  })
+  let imageUrl = null
+  let imageName = null
+
+  if (selectedImage.value) {
+    const formData = new FormData()
+    formData.append('file', selectedImage.value)
+
+    try {
+      const uploadResponse = await axios.post('/api/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+
+      if (uploadResponse.data.success) {
+        imageUrl = uploadResponse.data.url
+        imageName = uploadResponse.data.filename
+        uploadedImageName.value = imageName
+        ElMessage.success('图片上传成功')
+      }
+    } catch (error) {
+      console.error('图片上传失败:', error)
+      ElMessage.error('图片上传失败，请重试')
+      resetUpload()
+      return
+    }
+  }
+
+  if (message) {
+    messages.value.push({
+      role: 'user',
+      content: message,
+      image: imageUrl
+    })
+  } else if (imageUrl) {
+    messages.value.push({
+      role: 'user',
+      content: '',
+      image: imageUrl
+    })
+  }
 
   inputMessage.value = ''
+  resetUpload()
   loading.value = true
   await scrollToBottom()
 
@@ -248,7 +352,10 @@ const sendMessage = async () => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ question: message })
+      body: JSON.stringify({
+        question: message,
+        image_name: imageName
+      })
     })
 
     if (!response.ok) {
@@ -579,6 +686,14 @@ onMounted(() => {
   margin-bottom: 4px;
 }
 
+.message-image {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  margin-top: 12px;
+  object-fit: contain;
+}
+
 .message-text.loading {
   display: flex;
   align-items: center;
@@ -609,6 +724,61 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   align-items: flex-end;
+}
+
+.input-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upload-button {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.input-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.image-preview {
+  position: relative;
+  display: inline-block;
+  max-width: 200px;
+}
+
+.image-preview img {
+  max-width: 100%;
+  max-height: 150px;
+  border-radius: 8px;
+  object-fit: contain;
+  border: 2px solid #e0e0e0;
+}
+
+.preview-close {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: white;
+  border: 2px solid #ff4d4f;
+  color: #ff4d4f;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.preview-close:hover {
+  background: #ff4d4f;
+  color: white;
 }
 
 .chat-input :deep(.el-textarea__inner) {
