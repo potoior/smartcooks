@@ -1,19 +1,11 @@
-"""
-FastAPI 主应用
-"""
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import sys
-sys.path.append(str(Path(__file__).parent))
-
-from api.routers.rag_router import router
-from api.routers.upload_router import router as upload_router
-from rag_system import RecipeRAGSystem
+from core.rag_system import RecipeRAGSystem
+from api.v1.api import api_router
 
 app = FastAPI(
     title="尝尝咸淡 RAG API",
@@ -33,7 +25,6 @@ app.add_middleware(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("正在初始化 RAG 系统...")
-    # 由于RecipeRAGSystem现在是单例模式，这里会自动创建或获取唯一实例
     rag_system_instance = RecipeRAGSystem()
     print("RAG 系统初始化完成！")
     yield
@@ -41,8 +32,7 @@ async def lifespan(app: FastAPI):
 
 app.router.lifespan_context = lifespan
 
-app.include_router(router, prefix="/api", tags=["RAG"])
-app.include_router(upload_router, prefix="/api", tags=["Upload"])
+app.include_router(api_router, prefix="/api/v1")
 
 uploads_dir = Path("uploads")
 uploads_dir.mkdir(exist_ok=True)

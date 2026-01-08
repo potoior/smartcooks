@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from fastapi.responses import StreamingResponse
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
-from config import DEFAULT_CONFIG, RAGConfig
+from core.config import DEFAULT_CONFIG, RAGConfig
 from rag_modules import (
     DataPreparationModule,
     IndexConstructionModule,
