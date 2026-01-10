@@ -5,6 +5,7 @@ from typing import Optional
 class QuestionRequest(BaseModel):
     question: str
     image_name: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class SearchRequest(BaseModel):
@@ -16,6 +17,7 @@ class AnswerResponse(BaseModel):
     answer: str
     route_type: str
     documents: list
+    session_id: Optional[str] = None
 
 
 class StreamChunk(BaseModel):

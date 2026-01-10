@@ -15,3 +15,5 @@ uvicorn
 python-dotenv
 pydantic
 jieba>=0.42.1
+sqlalchemy
+aiosqlite

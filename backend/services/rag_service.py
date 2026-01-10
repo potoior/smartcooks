@@ -19,6 +19,7 @@ class RAGService:
     def ask_question(
         self, 
         question: str, 
+        chat_history: List[Dict[str, Any]] = None,
         stream: bool = False
     ) -> Dict[str, Any]:
         """
@@ -31,7 +32,7 @@ class RAGService:
         Returns:
             回答结果
         """
-        return self.rag.ask_question(question, stream=stream)
+        return self.rag.ask_question(question, chat_history=chat_history, stream=stream)
     
     def search_by_category(
         self, 

@@ -21,9 +21,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.responses import JSONResponse
+from fastapi import Request, HTTPException
+from schemas.common import ErrorResponse
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(
+            code=exc.status_code,
+            message=exc.detail
+        ).model_dump()
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content=ErrorResponse(
+            code=500,
+            message=str(exc)
+        ).model_dump()
+    )
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 初始化数据库
+    from core.database import init_db
+    await init_db()
+    
     print("正在初始化 RAG 系统...")
     rag_system_instance = RecipeRAGSystem()
     print("RAG 系统初始化完成！")

@@ -130,18 +130,51 @@ class RecipeRAGSystem:
         """获取知识库统计信息"""
         return self.data_module.get_statistics()
 
-    def ask_question(self, question: str, stream: bool = True):
+    def ask_question(self, question: str, chat_history: list = None, stream: bool = True):
         """回答用户问题"""
+        
+        # 格式化聊天历史
+        chat_history_str = ""
+        if chat_history:
+            history_parts = []
+            for msg in chat_history[-6:]: # 只取最近6条
+                role_name = "用户" if msg.get("role") == "user" else "助手"
+                content = msg.get("content", "")
+                history_parts.append(f"{role_name}: {content}")
+            chat_history_str = "\n".join(history_parts)
 
         if not all([self.retrieval_module, self.generation_module]):
             raise ValueError("请先构建知识库")
         print(f"开始处理问题:{question},当前的stream为{stream}")
         route_type = self.generation_module.query_router(question)
 
-        if route_type == 'list':
-            rewritten_query = question
-        else:
-            rewritten_query = self.generation_module.query_rewrite(question)
+
+        print(f"路由结果: {route_type}")
+
+        # 如果是闲聊，直接生成不需要检索
+        if route_type == 'chat':
+            if stream:
+                async def generate():
+                    answer_chunks = self.generation_module.generate_chat_answer_stream(question, chat_history=chat_history_str)
+                    async for chunk in answer_chunks:
+                        row = {
+                            "answer": chunk,
+                            "documents": [],
+                            "route_type": "chat"
+                        }
+                        yield row
+                
+                return generate()
+            else:
+                answer = self.generation_module.generate_chat_answer(question, chat_history=chat_history_str)
+                return {
+                    "answer": answer,
+                    "documents": [],
+                    "route_type": "chat"
+                }
+
+        # 优化查询（仅非闲聊）
+        rewritten_query = self.generation_module.query_rewrite(question)
 
         filters = self._extract_filters_from_query(question)
         if filters:
@@ -155,7 +188,7 @@ class RecipeRAGSystem:
 
         if not relevant_chunks:
             if stream:
-                def empty_generator():
+                async def empty_generator():
                     yield {
                         "answer": "抱歉，没有找到相关的食谱信息。请尝试其他菜品名称或关键词。",
                         "route_type": route_type,
@@ -180,15 +213,15 @@ class RecipeRAGSystem:
             })
 
         if stream:
-            def stream_generator():
+            async def stream_generator():
                 if route_type == 'list':
                     answer_chunks = self.generation_module.generate_list_answer_stream(question, relevant_docs)
                 elif route_type == "detail":
-                    answer_chunks = self.generation_module.generate_step_by_step_answer_stream(question, relevant_docs)
+                    answer_chunks = self.generation_module.generate_step_by_step_answer_stream(question, relevant_docs, chat_history=chat_history_str)
                 else:
-                    answer_chunks = self.generation_module.generate_basic_answer_stream(question, relevant_docs)
+                    answer_chunks = self.generation_module.generate_basic_answer_stream(question, relevant_docs, chat_history=chat_history_str)
                 
-                for chunk in answer_chunks:
+                async for chunk in answer_chunks:
                     row = {
                         "answer": chunk,
                         "route_type": route_type,
@@ -201,9 +234,9 @@ class RecipeRAGSystem:
             if route_type == 'list':
                 answer = self.generation_module.generate_list_answer(question, relevant_docs)
             elif route_type == "detail":
-                answer = self.generation_module.generate_step_by_step_answer(question, relevant_docs)
+                answer = self.generation_module.generate_step_by_step_answer(question, relevant_docs, chat_history=chat_history_str)
             else:
-                answer = self.generation_module.generate_basic_answer(question, relevant_docs)
+                answer = self.generation_module.generate_basic_answer(question, relevant_docs, chat_history=chat_history_str)
 
             return {
                 "answer": answer,

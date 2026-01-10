@@ -144,6 +144,47 @@
           </div>
 
           <div class="sidebar">
+            <el-button 
+              type="primary" 
+              class="new-chat-btn" 
+              :icon="Plus" 
+              @click="startNewChat"
+            >
+              新对话
+            </el-button>
+
+            <el-card class="history-card">
+              <template #header>
+                <div class="card-header">
+                  <el-icon><Message /></el-icon>
+                  <span>历史记录</span>
+                </div>
+              </template>
+              <div class="session-list" v-loading="sessionsLoading">
+                <div 
+                  v-for="session in sessions" 
+                  :key="session.id"
+                  :class="['session-item', { active: currentSessionId === session.id }]"
+                  @click="loadSession(session.id)"
+                >
+                  <div class="session-info">
+                    <span class="session-title">{{ session.title }}</span>
+                    <span class="session-date">{{ formatDate(session.updated_at) }}</span>
+                  </div>
+                  <el-button 
+                    link 
+                    type="danger" 
+                    :icon="Delete" 
+                    class="delete-btn"
+                    @click="(e) => deleteSession(session.id, e)"
+                  />
+                </div>
+                <div v-if="sessions.length === 0" class="empty-sessions">
+                  暂无历史记录
+                </div>
+              </div>
+            </el-card>
+
             <el-card class="stats-card">
               <template #header>
                 <div class="card-header">
@@ -227,10 +268,12 @@ import { ElMessage } from 'element-plus'
 import {
   Food, User, Promotion, Loading,
   DataAnalysis, Lightning, ChatDotRound,
-  Star, Coffee, Dessert, Picture, Close
+  Star, Coffee, Dessert, Picture, Close,
+  Plus, Message, Delete
 } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { marked } from 'marked'
+import { format } from 'date-fns'
 
 const messages = ref([
   {
@@ -246,6 +289,9 @@ const selectedImage = ref(null)
 const uploadRef = ref(null)
 const previewImage = ref(null)
 const uploadedImageName = ref('')
+const sessions = ref([])
+const currentSessionId = ref(null)
+const sessionsLoading = ref(false)
 
 const quickActions = [
   { text: '推荐几个素菜', icon: ChatDotRound, type: 'success' },
@@ -299,6 +345,9 @@ const sendMessage = async () => {
   const message = inputMessage.value.trim()
   if (!message && !selectedImage.value || loading.value) return
 
+  // 如果是新会话且没有任何消息，先清除欢迎语（如果有的话，不过目前欢迎语是默认保留的，看需求）
+  // 暂时保留欢迎语逻辑
+
   let imageUrl = null
   let imageName = null
 
@@ -347,14 +396,15 @@ const sendMessage = async () => {
   await scrollToBottom()
 
   try {
-    const response = await fetch('/api/v1/rag/ask_stream', {
+    const response = await fetch('http://127.0.0.1:8000/api/v1/rag/ask_stream', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         question: message,
-        image_name: imageName
+        image_name: imageName,
+        session_id: currentSessionId.value
       })
     })
 
@@ -389,6 +439,12 @@ const sendMessage = async () => {
 
             if (data.answer) {
               messages.value[messageIndex].content += data.answer
+            }
+            
+            // 捕获 session_id
+            if (data.session_id && !currentSessionId.value) {
+              currentSessionId.value = data.session_id
+              fetchSessions() // 刷新会话列表
             }
 
             if (data.route_type) {
@@ -428,8 +484,79 @@ const fetchStats = async () => {
   }
 }
 
+const fetchSessions = async () => {
+  sessionsLoading.value = true
+  try {
+    const response = await axios.get('/api/v1/chat/sessions')
+    if (response.data.success) {
+      sessions.value = response.data.data.sessions
+    }
+  } catch (error) {
+    console.error('Failed to fetch sessions:', error)
+  } finally {
+    sessionsLoading.value = false
+  }
+}
+
+const loadSession = async (sessionId) => {
+  if (currentSessionId.value === sessionId) return
+  
+  loading.value = true
+  try {
+    const response = await axios.get(`/api/v1/chat/sessions/${sessionId}/messages`)
+    if (response.data.success) {
+      const history = response.data.data.messages
+      // 转换消息格式
+      messages.value = history.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        image: msg.image_url, // 注意字段映射
+        documents: msg.meta_data?.documents || []
+      }))
+      currentSessionId.value = sessionId
+      await scrollToBottom()
+    }
+  } catch (error) {
+    console.error('Failed to load session:', error)
+    ElMessage.error('加载会话失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const deleteSession = async (sessionId, event) => {
+  event.stopPropagation() // 防止触发选择会话
+  try {
+    const response = await axios.delete(`/api/v1/chat/sessions/${sessionId}`)
+    if (response.data.success) {
+      ElMessage.success('会话已删除')
+      if (currentSessionId.value === sessionId) {
+        startNewChat()
+      }
+      fetchSessions()
+    }
+  } catch (error) {
+    console.error('Failed to delete session:', error)
+    ElMessage.error('删除失败')
+  }
+}
+
+const startNewChat = () => {
+  currentSessionId.value = null
+  messages.value = [{
+    role: 'assistant',
+    content: '你好！我是尝尝咸淡智能食谱助手。我可以帮你：\n\n• 推荐菜品和食谱\n• 提供详细的制作步骤\n• 解答烹饪问题\n• 按分类或难度筛选菜品\n\n有什么我可以帮你的吗？'
+  }]
+}
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return ''
+  return format(new Date(dateStr), 'MM-dd HH:mm')
+}
+
 onMounted(() => {
   fetchStats()
+  fetchSessions()
 })
 </script>
 
@@ -796,7 +923,101 @@ onMounted(() => {
   width: 320px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px; /* 调整间距 */
+}
+
+.new-chat-btn {
+  width: 100%;
+  height: 48px;
+  font-size: 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+  transition: transform 0.2s;
+}
+
+.new-chat-btn:hover {
+  transform: translateY(-2px);
+}
+
+.history-card {
+  flex: 1; /* 让历史记录卡片占据更多空间 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 启用内部滚动 */
+  max-height: 400px; /* 限制高度 */
+}
+
+.history-card :deep(.el-card__body) {
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.session-list {
+  padding: 12px;
+}
+
+.session-item {
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: #f5f7fa;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid transparent;
+}
+
+.session-item:hover {
+  background: #ecf5ff;
+}
+
+.session-item.active {
+  background: #ecf5ff;
+  border-color: #409eff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+}
+
+.session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+  flex: 1;
+  padding-right: 8px;
+}
+
+.session-title {
+  font-size: 14px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.session-date {
+  font-size: 12px;
+  color: #999;
+}
+
+.delete-btn {
+  opacity: 0;
+  transition: opacity 0.2s;
+  padding: 4px;
+}
+
+.session-item:hover .delete-btn {
+  opacity: 1;
+}
+
+.empty-sessions {
+  text-align: center;
+  color: #999;
+  padding: 24px 0;
+  font-size: 14px;
 }
 
 .stats-card,

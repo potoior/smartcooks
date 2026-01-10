@@ -53,13 +53,14 @@ class GenerationIntegrationModule:
         
         logger.info("LLM初始化完成")
     
-    def generate_basic_answer(self, query: str, context_docs: List[Document]) -> str:
+    def generate_basic_answer(self, query: str, context_docs: List[Document], chat_history: str = "") -> str:
         """
         生成基础回答
 
         Args:
             query: 用户查询
             context_docs: 上下文文档列表
+            chat_history: 聊天历史字符串
 
         Returns:
             生成的回答
@@ -70,7 +71,11 @@ class GenerationIntegrationModule:
 
         # 使用LCEL构建链
         chain = (
-            {"question": RunnablePassthrough(), "context": lambda _: context}
+            {
+                "question": RunnablePassthrough(), 
+                "context": lambda _: context,
+                "chat_history": lambda _: chat_history
+            }
             | prompt
             | self.llm
             | StrOutputParser()
@@ -79,13 +84,14 @@ class GenerationIntegrationModule:
         response = chain.invoke(query)
         return response
     
-    def generate_step_by_step_answer(self, query: str, context_docs: List[Document]) -> str:
+    def generate_step_by_step_answer(self, query: str, context_docs: List[Document], chat_history: str = "") -> str:
         """
         生成分步骤回答
 
         Args:
             query: 用户查询
             context_docs: 上下文文档列表
+            chat_history: 聊天历史字符串
 
         Returns:
             分步骤的详细回答
@@ -95,7 +101,11 @@ class GenerationIntegrationModule:
         prompt = ChatPromptTemplate.from_template(PromptTemplates.STEP_BY_STEP_TEMPLATE)
 
         chain = (
-            {"question": RunnablePassthrough(), "context": lambda _: context}
+            {
+                "question": RunnablePassthrough(), 
+                "context": lambda _: context,
+                "chat_history": lambda _: chat_history
+            }
             | prompt
             | self.llm
             | StrOutputParser()
@@ -160,7 +170,7 @@ class GenerationIntegrationModule:
         result = chain.invoke(query).strip().lower()
 
         # 确保返回有效的路由类型
-        if result in ['list', 'detail', 'general']:
+        if result in ['list', 'detail', 'general', 'chat']:
             return result
         else:
             return 'general'  # 默认类型
@@ -194,7 +204,7 @@ class GenerationIntegrationModule:
         else:
             return f"为您推荐以下菜品：\n" + "\n".join([f"{i+1}. {name}" for i, name in enumerate(dish_names[:3])]) + f"\n\n还有其他 {len(dish_names)-3} 道菜品可供选择。"
 
-    def generate_list_answer_stream(self, query: str, context_docs: List[Document]):
+    async def generate_list_answer_stream(self, query: str, context_docs: List[Document]):
         """
         生成列表式回答 - 流式输出
 
@@ -231,13 +241,14 @@ class GenerationIntegrationModule:
                 yield f"{i+1}. {name}\n"
             yield f"\n还有其他 {len(dish_names)-3} 道菜品可供选择。"
 
-    def generate_basic_answer_stream(self, query: str, context_docs: List[Document]):
+    async def generate_basic_answer_stream(self, query: str, context_docs: List[Document], chat_history: str = ""):
         """
         生成基础回答 - 流式输出
 
         Args:
             query: 用户查询
             context_docs: 上下文文档列表
+            chat_history: 聊天历史字符串
 
         Yields:
             生成的回答片段
@@ -247,22 +258,27 @@ class GenerationIntegrationModule:
         prompt = ChatPromptTemplate.from_template(PromptTemplates.BASIC_ANSWER_TEMPLATE)
 
         chain = (
-            {"question": RunnablePassthrough(), "context": lambda _: context}
+            {
+                "question": RunnablePassthrough(), 
+                "context": lambda _: context,
+                "chat_history": lambda _: chat_history
+            }
             | prompt
             | self.llm
             | StrOutputParser()
         )
 
-        for chunk in chain.stream(query):
+        async for chunk in chain.astream(query):
             yield chunk
 
-    def generate_step_by_step_answer_stream(self, query: str, context_docs: List[Document]):
+    async def generate_step_by_step_answer_stream(self, query: str, context_docs: List[Document], chat_history: str = ""):
         """
         生成详细步骤回答 - 流式输出
 
         Args:
             query: 用户查询
             context_docs: 上下文文档列表
+            chat_history: 聊天历史字符串
 
         Yields:
             详细步骤回答片段
@@ -272,13 +288,61 @@ class GenerationIntegrationModule:
         prompt = ChatPromptTemplate.from_template(PromptTemplates.STEP_BY_STEP_TEMPLATE)
 
         chain = (
-            {"question": RunnablePassthrough(), "context": lambda _: context}
+            {
+                "question": RunnablePassthrough(), 
+                "context": lambda _: context,
+                "chat_history": lambda _: chat_history
+            }
             | prompt
             | self.llm
             | StrOutputParser()
         )
 
-        for chunk in chain.stream(query):
+        async for chunk in chain.astream(query):
+            yield chunk
+
+    def generate_chat_answer(self, query: str, chat_history: str = "") -> str:
+        """
+        生成闲聊回答
+        
+        Args:
+            query: 用户输入
+            chat_history: 聊天历史
+
+        Returns:
+            回答
+        """
+        prompt = ChatPromptTemplate.from_template(PromptTemplates.CHAT_ANSWER_TEMPLATE)
+        
+        chain = (
+            {
+                "question": RunnablePassthrough(),
+                "chat_history": lambda _: chat_history
+            }
+            | prompt
+            | self.llm
+            | StrOutputParser()
+        )
+        
+        return chain.invoke(query)
+
+    async def generate_chat_answer_stream(self, query: str, chat_history: str = ""):
+        """
+        生成闲聊回答 - 流式
+        """
+        prompt = ChatPromptTemplate.from_template(PromptTemplates.CHAT_ANSWER_TEMPLATE)
+        
+        chain = (
+            {
+                "question": RunnablePassthrough(),
+                "chat_history": lambda _: chat_history
+            }
+            | prompt
+            | self.llm
+            | StrOutputParser()
+        )
+        
+        async for chunk in chain.astream(query):
             yield chunk
 
     def _build_context(self, docs: List[Document], max_length: int = 2000) -> str:
