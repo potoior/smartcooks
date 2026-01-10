@@ -18,7 +18,8 @@ class RAGConfig:
     llm_model: str = "Qwen/Qwen2.5-7B-Instruct"
 
     # 检索配置
-    top_k: int = 3
+    top_k: int = 5
+    score_threshold: float = 0.4
 
     # 生成配置
     temperature: float = 0.1
@@ -41,6 +42,7 @@ class RAGConfig:
             'embedding_model': self.embedding_model,
             'llm_model': self.llm_model,
             'top_k': self.top_k,
+            'score_threshold': self.score_threshold,
             'temperature': self.temperature,
             'max_tokens': self.max_tokens
         }

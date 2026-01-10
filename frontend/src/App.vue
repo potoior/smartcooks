@@ -307,7 +307,7 @@ const sendMessage = async () => {
     formData.append('file', selectedImage.value)
 
     try {
-      const uploadResponse = await axios.post('/api/upload', formData, {
+      const uploadResponse = await axios.post('/api/v1/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -347,7 +347,7 @@ const sendMessage = async () => {
   await scrollToBottom()
 
   try {
-    const response = await fetch('/api/ask_stream', {
+    const response = await fetch('/api/v1/rag/ask_stream', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -421,7 +421,7 @@ const sendMessage = async () => {
 
 const fetchStats = async () => {
   try {
-    const response = await axios.get('/api/stats')
+    const response = await axios.get('/api/v1/rag/stats')
     stats.value = response.data.data
   } catch (error) {
     console.error('Failed to fetch stats:', error)

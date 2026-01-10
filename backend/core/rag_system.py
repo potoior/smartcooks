@@ -110,7 +110,11 @@ class RecipeRAGSystem:
             self.index_module.save_index()
 
         print("初始化检索优化...")
-        self.retrieval_module = RetrievalOptimizationModule(vectorstore, chunks)
+        self.retrieval_module = RetrievalOptimizationModule(
+            vectorstore, 
+            chunks,
+            score_threshold=self.config.score_threshold
+        )
 
         stats = self.data_module.get_statistics()
         print(f"\n📊 知识库统计:")
