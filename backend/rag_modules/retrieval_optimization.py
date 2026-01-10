@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class RetrievalOptimizationModule:
     """检索优化模块 - 负责混合检索和过滤"""
     
-    def __init__(self, vectorstore: FAISS, chunks: List[Document], score_threshold: float = 0.4):
+    def __init__(self, vectorstore: FAISS, chunks: List[Document], score_threshold: float = 0.4, rrf_weights: Dict[str, float] = None):
         """
         初始化检索优化模块
         
@@ -22,11 +22,22 @@ class RetrievalOptimizationModule:
             vectorstore: FAISS向量存储
             chunks: 文档块列表
             score_threshold: 检索阈值
+            rrf_weights: RRF重排权重
         """
         self.vectorstore = vectorstore
         self.chunks = chunks
         self.score_threshold = score_threshold
+        self.rrf_weights = rrf_weights or {"vector": 3.0, "bm25": 0.5}
         self.setup_retrievers()
+
+# ... (omitted code)
+
+    def _rrf_rerank(self, vector_docs: List[Document], bm25_docs: List[Document], k: int = 60) -> List[Document]:
+        """
+        使用加权RRF算法重排文档
+        """
+        weights = self.rrf_weights
+
 
     def setup_retrievers(self):
         """设置向量检索器和BM25检索器"""
@@ -154,13 +165,11 @@ class RetrievalOptimizationModule:
         
         return filtered_docs
 
-    def _rrf_rerank(self, vector_docs: List[Document], bm25_docs: List[Document], k: int = 60, weights: Dict[str, float] = None) -> List[Document]:
+    def _rrf_rerank(self, vector_docs: List[Document], bm25_docs: List[Document], k: int = 60) -> List[Document]:
         """
         使用加权RRF算法重排文档
-        weights: {"vector": 2.0, "bm25": 0.5}
         """
-        if weights is None:
-            weights = {"vector": 3.0, "bm25": 0.5}  # 提高向量检索权重，降低BM25权重
+        weights = self.rrf_weights
 
         doc_scores = {}
         doc_objects = {}

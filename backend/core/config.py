@@ -20,14 +20,18 @@ class RAGConfig:
     # 检索配置
     top_k: int = 5
     score_threshold: float = 0.4
+    rrf_weights: Dict[str, float] = None
+    
+    def __post_init__(self):
+        """初始化后的处理"""
+        if self.rrf_weights is None:
+            self.rrf_weights = {"vector": 3.0, "bm25": 0.5}
 
     # 生成配置
     temperature: float = 0.1
     max_tokens: int = 2048
 
-    def __post_init__(self):
-        """初始化后的处理"""
-        pass
+
     
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'RAGConfig':
@@ -43,6 +47,7 @@ class RAGConfig:
             'llm_model': self.llm_model,
             'top_k': self.top_k,
             'score_threshold': self.score_threshold,
+            'rrf_weights': self.rrf_weights,
             'temperature': self.temperature,
             'max_tokens': self.max_tokens
         }
