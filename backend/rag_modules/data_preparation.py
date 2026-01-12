@@ -102,7 +102,7 @@ class DataPreparationModule:
         file_path = Path(doc.metadata.get('source', ''))
         path_parts = file_path.parts
         
-        # 提取菜品分类
+        # 提取菜品分类 先默认分类是其他 如果在CATEGORY_MAPPING里面有了就替换掉
         doc.metadata['category'] = '其他'
         for key, value in self.CATEGORY_MAPPING.items():
             if key in path_parts:

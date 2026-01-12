@@ -137,7 +137,7 @@ class RecipeRAGSystem:
         chat_history_str = ""
         if chat_history:
             history_parts = []
-            for msg in chat_history[-6:]: # 只取最近6条
+            for msg in chat_history[-10:]: # 只取最近10条
                 role_name = "用户" if msg.get("role") == "user" else "助手"
                 content = msg.get("content", "")
                 history_parts.append(f"{role_name}: {content}")
@@ -174,8 +174,10 @@ class RecipeRAGSystem:
                 }
 
         # 优化查询（仅非闲聊）
-        rewritten_query = self.generation_module.query_rewrite(question)
-
+        rewritten_query = self.generation_module.query_rewrite(question, chat_history=chat_history_str)
+        if "最终查询:" in rewritten_query:
+            rewritten_query = rewritten_query.split("最终查询:")[1]
+        print(f"优化后的查询: {rewritten_query}")
         filters = self._extract_filters_from_query(question)
         if filters:
             relevant_chunks = self.retrieval_module.metadata_filtered_search(

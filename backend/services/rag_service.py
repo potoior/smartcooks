@@ -91,4 +91,4 @@ class RAGService:
         if food_name == "没有食材":
             raise ValueError("图片中没有食材")
         
-        return f"我有{food_name},{question}"
+        return f"用户上传了一张图片,图片里面有:{food_name}。用户的问题是:{question}"

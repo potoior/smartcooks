@@ -142,14 +142,16 @@ async def ask_question_stream(
         
         # 流结束，保存助手消息
         # 注意：这里需要创建一个新的 DB session，因为原来的可能已经关闭或不在此上下文
-        # 简单起见，我们尝试复用 chat_service，但要注意 async生成器的生命周期
         try:
-             await chat_service.add_message(
-                session_id=session_id,
-                role="assistant",
-                content=full_answer,
-                meta_data={"documents": [d.metadata for d in documents] if documents else []}
-            )
+            from core.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as session:
+                stream_chat_service = ChatService(session)
+                await stream_chat_service.add_message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=full_answer,
+                    meta_data={"documents": documents if documents else []}
+                )
         except Exception as e:
             print(f"Failed to save stream message: {e}")
 

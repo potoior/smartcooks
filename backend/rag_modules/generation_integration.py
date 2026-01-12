@@ -114,23 +114,27 @@ class GenerationIntegrationModule:
         response = chain.invoke(query)
         return response
     
-    def query_rewrite(self, query: str) -> str:
+    def query_rewrite(self, query: str, chat_history: str = "") -> str:
         """
         智能查询重写 - 让大模型判断是否需要重写查询
 
         Args:
             query: 原始查询
+            chat_history: 聊天历史
 
         Returns:
             重写后的查询或原查询
         """
         prompt = PromptTemplate(
             template=PromptTemplates.QUERY_REWRITE_TEMPLATE,
-            input_variables=["query"]
+            input_variables=["query", "chat_history"]
         )
 
         chain = (
-            {"query": RunnablePassthrough()}
+            {
+                "query": RunnablePassthrough(),
+                "chat_history": lambda _: chat_history
+            }
             | prompt
             | self.llm
             | StrOutputParser()
@@ -284,9 +288,9 @@ class GenerationIntegrationModule:
             详细步骤回答片段
         """
         context = self._build_context(context_docs)
-
+        # print("context:", context)
         prompt = ChatPromptTemplate.from_template(PromptTemplates.STEP_BY_STEP_TEMPLATE)
-
+        # print("prompt:", prompt)
         chain = (
             {
                 "question": RunnablePassthrough(), 

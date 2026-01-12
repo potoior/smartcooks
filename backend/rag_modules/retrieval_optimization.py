@@ -78,8 +78,15 @@ class RetrievalOptimizationModule:
         Returns:
             检索到的文档列表
         """
-        # 分别获取向量检索和BM25检索结果（扩大搜索范围以便去重）
-        vector_docs = self.vector_retriever.invoke(query)
+        # 1. 向量检索 (带分数)
+        vector_results = self.vectorstore.similarity_search_with_relevance_scores(query, k=10)
+        vector_docs = []
+        for doc, score in vector_results:
+            if score >= self.score_threshold:
+                doc.metadata['score'] = score
+                vector_docs.append(doc)
+        
+        # 2. BM25检索
         bm25_docs = self.bm25_retriever.invoke(query)
 
         print(f"\n[DEBUG] Query: {query}")
@@ -87,7 +94,7 @@ class RetrievalOptimizationModule:
         for i, doc in enumerate(vector_docs):
              score = "N/A"
              if hasattr(doc, 'metadata') and 'score' in doc.metadata:
-                 score = doc.metadata['score']
+                 score = f"{doc.metadata['score']:.4f}"
              print(f"  {i+1}. {doc.metadata.get('dish_name')} (Score: {score})")
              
         print(f"[DEBUG] BM25 Search Raw (len={len(bm25_docs)}):")
@@ -125,7 +132,7 @@ class RetrievalOptimizationModule:
                 
         return unique_docs
     
-    def _rrf_rerank(self, vector_docs: List[Document], bm25_docs: List[Document], k: int = 60) -> List[Document]:
+    def metadata_filtered_search(self, query: str, filters: Dict[str, Any], top_k: int = 3) -> List[Document]:
         """
         带元数据过滤的检索
         
@@ -207,7 +214,7 @@ class RetrievalOptimizationModule:
                 # 将RRF分数添加到文档元数据中
                 doc.metadata['rrf_score'] = final_score
                 reranked_docs.append(doc)
-                logger.debug(f"最终排序 - 文档: {doc.page_content[:50]}... 最终RRF分数: {final_score:.4f}")
+                print(f"[DEBUG] Final Rank {len(reranked_docs)}. {doc.metadata.get('dish_name')} - RRF Score: {final_score:.4f}")
 
         logger.info(f"RRF重排完成: 向量检索{len(vector_docs)}个文档, BM25检索{len(bm25_docs)}个文档, 合并后{len(reranked_docs)}个文档")
 
